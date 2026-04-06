@@ -202,13 +202,6 @@ const App = (() => {
       hobbySpent += parseInt(document.getElementById(`skill-hobby-pts-${id}`)?.value) || 0;
     });
 
-    setText('occ-points-used',   occSpent);
-    setText('hobby-points-used', hobbySpent);
-
-    // Remaining
-    setRemain('occ-points-remain',   occTotal,   occSpent);
-    setRemain('hobby-points-remain', hobbyTotal, hobbySpent);
-
     // Sticky bar
     setText('sb-occ-total',   occTotal   ?? '-');
     setText('sb-hobby-total', hobbyTotal ?? '-');
