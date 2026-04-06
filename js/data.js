@@ -161,6 +161,18 @@ const SKILLS = [
   { name: '芸術/製作（文芸）', base: 5, category: '芸術' },
 ];
 
+const FORMULA_OPTIONS = [
+  { key: 'EDU4',              label: 'EDU × 4',                   calc: (s) => s.edu * 4 },
+  { key: 'EDU2STR2',          label: 'EDU×2 + STR×2',             calc: (s) => s.edu * 2 + s.str * 2 },
+  { key: 'EDU2DEX2',          label: 'EDU×2 + DEX×2',             calc: (s) => s.edu * 2 + s.dex * 2 },
+  { key: 'EDU2POW2',          label: 'EDU×2 + POW×2',             calc: (s) => s.edu * 2 + s.pow * 2 },
+  { key: 'EDU2INT2',          label: 'EDU×2 + INT×2',             calc: (s) => s.edu * 2 + s.int * 2 },
+  { key: 'EDU2maxSTRDEX2',    label: 'EDU×2 + (STR or DEX)×2',   calc: (s) => s.edu * 2 + Math.max(s.str, s.dex) * 2 },
+  { key: 'EDU2maxDEXPOW2',    label: 'EDU×2 + (DEX or POW)×2',   calc: (s) => s.edu * 2 + Math.max(s.dex, s.pow) * 2 },
+  { key: 'EDU2maxSTRPOW2',    label: 'EDU×2 + (STR or POW)×2',   calc: (s) => s.edu * 2 + Math.max(s.str, s.pow) * 2 },
+  { key: 'EDU2maxDEXSTR2',    label: 'EDU×2 + (DEX or STR)×2',   calc: (s) => s.edu * 2 + Math.max(s.dex, s.str) * 2 },
+];
+
 function rollDice(count, sides) {
   let total = 0;
   for (let i = 0; i < count; i++) {

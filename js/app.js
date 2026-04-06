@@ -1,4 +1,7 @@
 const App = (() => {
+  const LS_CHARS = 'coc7-saved-characters';
+  const LS_OCCS  = 'coc7-custom-occupations';
+
   // ---- Helpers ----
   function getStat(id) {
     return parseInt(document.getElementById(`stat-${id}`)?.value) || 0;
@@ -23,6 +26,32 @@ const App = (() => {
     return name.replace(/[（）/\s・]/g, '_');
   }
 
+  function allOccupations() {
+    const custom = loadCustomOccupations().map(o => {
+      const formula = FORMULA_OPTIONS.find(f => f.key === o.formulaKey);
+      return {
+        name:          o.name,
+        formulaLabel:  formula ? formula.label : o.formulaKey,
+        calcPoints:    formula ? formula.calc : () => 0,
+        creditRating:  [o.crMin || 0, o.crMax || 0],
+        suggestedSkills: o.suggestedSkills || [],
+        description:   o.description || '',
+        isCustom:      true,
+      };
+    });
+    return [...OCCUPATIONS, ...custom];
+  }
+
+  // ---- Tabs ----
+  function switchTab(tabId) {
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.tab === tabId);
+    });
+    document.querySelectorAll('.tab-panel').forEach(panel => {
+      panel.classList.toggle('active', panel.id === `tab-${tabId}`);
+    });
+  }
+
   // ---- Dice ----
   function rollStat(id) {
     const char = CHARACTERISTICS.find(c => c.id === id);
@@ -43,11 +72,11 @@ const App = (() => {
 
   // ---- Derived Stats ----
   function updateDerived() {
-    const s = getStats();
+    const s   = getStats();
     const age = parseInt(document.getElementById('char-age')?.value) || 0;
 
     let mov = 8;
-    if (s.dex < s.siz && s.str < s.siz) mov = 7;
+    if (s.dex < s.siz && s.str < s.siz)      mov = 7;
     else if (s.dex >= s.siz && s.str >= s.siz) mov = 9;
     if      (age >= 80) mov -= 5;
     else if (age >= 70) mov -= 4;
@@ -57,9 +86,9 @@ const App = (() => {
 
     const strSiz = s.str + s.siz;
     let build = 0, db = '0';
-    if      (strSiz <= 64)  { build = -2; db = '-2'; }
-    else if (strSiz <= 84)  { build = -1; db = '-1'; }
-    else if (strSiz <= 124) { build =  0; db = '0';  }
+    if      (strSiz <= 64)  { build = -2; db = '-2';   }
+    else if (strSiz <= 84)  { build = -1; db = '-1';   }
+    else if (strSiz <= 124) { build =  0; db = '0';    }
     else if (strSiz <= 164) { build =  1; db = '+1D4'; }
     else if (strSiz <= 204) { build =  2; db = '+1D6'; }
     else if (strSiz <= 284) { build =  3; db = '+2D6'; }
@@ -91,8 +120,7 @@ const App = (() => {
       const id     = skillId(skill.name);
       const baseEl = document.getElementById(`skill-base-${id}`);
       if (!baseEl) return;
-      const baseVal = calcBase(skill.base, stats);
-      baseEl.textContent = baseVal;
+      baseEl.textContent = calcBase(skill.base, stats);
       updateSkillCalc(skill.name);
     });
     updatePoints();
@@ -108,9 +136,9 @@ const App = (() => {
     const fifthEl = document.getElementById(`skill-fifth-${id}`);
     if (!baseEl) return;
 
-    const base  = parseInt(baseEl.textContent)  || 0;
-    const occ   = parseInt(occEl?.value)         || 0;
-    const hobby = parseInt(hobbyEl?.value)        || 0;
+    const base  = parseInt(baseEl.textContent) || 0;
+    const occ   = parseInt(occEl?.value)        || 0;
+    const hobby = parseInt(hobbyEl?.value)       || 0;
     const total = base + occ + hobby;
 
     if (totalEl) totalEl.textContent = total;
@@ -119,9 +147,22 @@ const App = (() => {
   }
 
   // ---- Occupation ----
+  function rebuildOccupationDropdown() {
+    const sel = document.getElementById('char-occupation');
+    const current = sel.value;
+    sel.innerHTML = '<option value="">── 選択してください ──</option>';
+    allOccupations().forEach(occ => {
+      const opt = document.createElement('option');
+      opt.value = occ.name;
+      opt.textContent = occ.name + (occ.isCustom ? ' ✦' : '');
+      sel.appendChild(opt);
+    });
+    sel.value = current;
+  }
+
   function applyOccupation() {
     const sel    = document.getElementById('char-occupation');
-    const occ    = OCCUPATIONS.find(o => o.name === sel.value);
+    const occ    = allOccupations().find(o => o.name === sel.value);
     const infoBox = document.getElementById('occupation-info');
 
     if (!occ) {
@@ -145,31 +186,73 @@ const App = (() => {
   }
 
   function updatePoints() {
-    const stats = getStats();
-    const sel   = document.getElementById('char-occupation');
-    const occ   = OCCUPATIONS.find(o => o.name === sel?.value);
-
-    const occTotal   = occ ? occ.calcPoints(stats) : null;
+    const stats    = getStats();
+    const sel      = document.getElementById('char-occupation');
+    const occ      = allOccupations().find(o => o.name === sel?.value);
+    const occTotal = occ ? occ.calcPoints(stats) : null;
     const hobbyTotal = stats.int ? stats.int * 2 : null;
 
-    document.getElementById('occ-points-total').textContent   = occTotal   ?? '-';
-    document.getElementById('hobby-points-total').textContent = hobbyTotal ?? '-';
+    setText('occ-points-total',   occTotal   ?? '-');
+    setText('hobby-points-total', hobbyTotal ?? '-');
 
     let occSpent = 0, hobbySpent = 0;
     SKILLS.forEach(skill => {
-      const id      = skillId(skill.name);
-      const occPts  = parseInt(document.getElementById(`skill-occ-pts-${id}`)?.value)   || 0;
-      const hobbyPts= parseInt(document.getElementById(`skill-hobby-pts-${id}`)?.value) || 0;
-      occSpent   += occPts;
-      hobbySpent += hobbyPts;
+      const id = skillId(skill.name);
+      occSpent   += parseInt(document.getElementById(`skill-occ-pts-${id}`)?.value)   || 0;
+      hobbySpent += parseInt(document.getElementById(`skill-hobby-pts-${id}`)?.value) || 0;
     });
 
-    document.getElementById('occ-points-used').textContent   = occSpent;
-    document.getElementById('hobby-points-used').textContent = hobbySpent;
+    setText('occ-points-used',   occSpent);
+    setText('hobby-points-used', hobbySpent);
+
+    // Remaining
+    setRemain('occ-points-remain',   occTotal,   occSpent);
+    setRemain('hobby-points-remain', hobbyTotal, hobbySpent);
+
+    // Sticky bar
+    setText('sb-occ-total',   occTotal   ?? '-');
+    setText('sb-hobby-total', hobbyTotal ?? '-');
+    setText('sb-occ-used',   occSpent);
+    setText('sb-hobby-used', hobbySpent);
+    setRemainBadge('sb-occ-remain',   occTotal,   occSpent);
+    setRemainBadge('sb-hobby-remain', hobbyTotal, hobbySpent);
+
+    // 95 cap check
+    SKILLS.forEach(skill => {
+      const id    = skillId(skill.name);
+      const total = parseInt(document.getElementById(`skill-total-${id}`)?.textContent) || 0;
+      const row   = document.getElementById(`skill-row-${id}`);
+      if (row) {
+        row.classList.toggle('over-cap', total > 95);
+      }
+    });
   }
 
-  // ---- Save / Load ----
-  function save() {
+  function setText(id, val) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = val;
+  }
+
+  function setRemain(id, total, spent) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (total === null) { el.textContent = '-'; el.className = ''; return; }
+    const remain = total - spent;
+    el.textContent = remain < 0 ? `${remain}` : `残り ${remain}`;
+    el.className = remain < 0 ? 'over' : remain === 0 ? 'zero' : 'ok';
+  }
+
+  function setRemainBadge(id, total, spent) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (total === null) { el.textContent = ''; el.className = 'points-bar-remain unknown'; return; }
+    const remain = total - spent;
+    el.textContent = remain < 0 ? `超過 ${Math.abs(remain)}` : `残り ${remain}`;
+    el.className = `points-bar-remain ${remain < 0 ? 'over' : remain === 0 ? 'zero' : 'ok'}`;
+  }
+
+  // ---- Character Data ----
+  function getCharacterData() {
     const stats = {};
     CHARACTERISTICS.forEach(c => { stats[c.id] = getStat(c.id); });
 
@@ -182,57 +265,39 @@ const App = (() => {
       };
     });
 
-    const data = {
+    return {
       version: '7th',
       basic: {
-        name:       document.getElementById('char-name')?.value,
-        occupation: document.getElementById('char-occupation')?.value,
-        age:        document.getElementById('char-age')?.value,
-        gender:     document.getElementById('char-gender')?.value,
-        birthplace: document.getElementById('char-birthplace')?.value,
-        residence:  document.getElementById('char-residence')?.value,
+        name:       document.getElementById('char-name')?.value || '',
+        occupation: document.getElementById('char-occupation')?.value || '',
+        age:        document.getElementById('char-age')?.value || '',
+        gender:     document.getElementById('char-gender')?.value || '',
+        birthplace: document.getElementById('char-birthplace')?.value || '',
+        residence:  document.getElementById('char-residence')?.value || '',
       },
       stats,
       skills,
+      portrait: {
+        hair:    document.getElementById('pt-hair')?.value || '',
+        eyes:    document.getElementById('pt-eyes')?.value || '',
+        build:   document.getElementById('pt-build')?.value || '',
+        clothes: document.getElementById('pt-clothes')?.value || '',
+        vibe:    document.getElementById('pt-vibe')?.value || '',
+        notes:   document.getElementById('pt-notes')?.value || '',
+      },
       background: {
-        appearance:  document.getElementById('bg-appearance')?.value,
-        personality: document.getElementById('bg-personality')?.value,
-        people:      document.getElementById('bg-people')?.value,
-        places:      document.getElementById('bg-places')?.value,
-        treasures:   document.getElementById('bg-treasures')?.value,
-        trauma:      document.getElementById('bg-trauma')?.value,
-        notes:       document.getElementById('bg-notes')?.value,
+        appearance:  document.getElementById('bg-appearance')?.value || '',
+        personality: document.getElementById('bg-personality')?.value || '',
+        people:      document.getElementById('bg-people')?.value || '',
+        places:      document.getElementById('bg-places')?.value || '',
+        treasures:   document.getElementById('bg-treasures')?.value || '',
+        trauma:      document.getElementById('bg-trauma')?.value || '',
+        notes:       document.getElementById('bg-notes')?.value || '',
       },
     };
-
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href     = url;
-    a.download = `${data.basic.name || 'character'}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
   }
 
-  function load() {
-    document.getElementById('fileInput').click();
-  }
-
-  function loadFromFile(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        applyData(JSON.parse(e.target.result));
-      } catch {
-        alert('JSONの読み込みに失敗しました。');
-      }
-    };
-    reader.readAsText(file);
-  }
-
-  function applyData(data) {
+  function applyCharacterData(data) {
     const b = data.basic || {};
     if (b.name)       document.getElementById('char-name').value       = b.name;
     if (b.occupation) document.getElementById('char-occupation').value = b.occupation;
@@ -255,6 +320,14 @@ const App = (() => {
       updateSkillCalc(name);
     });
 
+    const pt = data.portrait || {};
+    if (pt.hair)    document.getElementById('pt-hair').value    = pt.hair;
+    if (pt.eyes)    document.getElementById('pt-eyes').value    = pt.eyes;
+    if (pt.build)   document.getElementById('pt-build').value   = pt.build;
+    if (pt.clothes) document.getElementById('pt-clothes').value = pt.clothes;
+    if (pt.vibe)    document.getElementById('pt-vibe').value    = pt.vibe;
+    if (pt.notes)   document.getElementById('pt-notes').value   = pt.notes;
+
     const bg = data.background || {};
     if (bg.appearance)  document.getElementById('bg-appearance').value  = bg.appearance;
     if (bg.personality) document.getElementById('bg-personality').value = bg.personality;
@@ -269,16 +342,182 @@ const App = (() => {
     updateSkillBases();
   }
 
+  // ---- Save / Load (JSON file) ----
+  function save() {
+    const data = getCharacterData();
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `${data.basic.name || 'character'}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function load() {
+    document.getElementById('fileInput').click();
+  }
+
+  function loadFromFile(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try { applyCharacterData(JSON.parse(e.target.result)); }
+      catch { alert('JSONの読み込みに失敗しました。'); }
+    };
+    reader.readAsText(file);
+  }
+
+  // ---- Custom Occupations (localStorage) ----
+  function loadCustomOccupations() {
+    try { return JSON.parse(localStorage.getItem(LS_OCCS) || '[]'); }
+    catch { return []; }
+  }
+
+  function saveCustomOccupations(list) {
+    localStorage.setItem(LS_OCCS, JSON.stringify(list));
+  }
+
+  function addCustomOccupation() {
+    const name    = document.getElementById('occ-new-name').value.trim();
+    const desc    = document.getElementById('occ-new-desc').value.trim();
+    const formula = document.getElementById('occ-new-formula').value;
+    const crMin   = parseInt(document.getElementById('occ-new-cr-min').value) || 0;
+    const crMax   = parseInt(document.getElementById('occ-new-cr-max').value) || 0;
+    const skillSel = document.getElementById('occ-new-skills');
+    const skills  = Array.from(skillSel.selectedOptions).map(o => o.value);
+
+    if (!name) { alert('職業名を入力してください。'); return; }
+    if (!formula) { alert('技能ポイント計算式を選択してください。'); return; }
+
+    const list = loadCustomOccupations();
+    list.push({ id: Date.now().toString(), name, description: desc, formulaKey: formula, crMin, crMax, suggestedSkills: skills });
+    saveCustomOccupations(list);
+
+    // reset form
+    document.getElementById('occ-new-name').value  = '';
+    document.getElementById('occ-new-desc').value  = '';
+    document.getElementById('occ-new-cr-min').value = '';
+    document.getElementById('occ-new-cr-max').value = '';
+    Array.from(skillSel.options).forEach(o => o.selected = false);
+
+    renderCustomOccupationList();
+    rebuildOccupationDropdown();
+  }
+
+  function deleteCustomOccupation(id) {
+    const list = loadCustomOccupations().filter(o => o.id !== id);
+    saveCustomOccupations(list);
+    renderCustomOccupationList();
+    rebuildOccupationDropdown();
+  }
+
+  function renderCustomOccupationList() {
+    const container = document.getElementById('custom-occ-list');
+    const list = loadCustomOccupations();
+
+    if (!list.length) {
+      container.innerHTML = '<p class="empty-msg">まだ職業が追加されていません。</p>';
+      return;
+    }
+
+    container.innerHTML = list.map(o => {
+      const formula = FORMULA_OPTIONS.find(f => f.key === o.formulaKey);
+      return `
+        <div class="custom-occ-card">
+          <div class="custom-occ-header">
+            <span class="custom-occ-name">${o.name}</span>
+            <button class="btn danger small" onclick="App.deleteCustomOccupation('${o.id}')">削除</button>
+          </div>
+          ${o.description ? `<p class="custom-occ-desc">${o.description}</p>` : ''}
+          <p class="custom-occ-meta">技能P：${formula ? formula.label : o.formulaKey}</p>
+          ${o.suggestedSkills.length ? `<p class="custom-occ-meta">推奨技能：${o.suggestedSkills.join('、')}</p>` : ''}
+          <p class="custom-occ-meta">信用ランク：${o.crMin} 〜 ${o.crMax}</p>
+        </div>
+      `;
+    }).join('');
+  }
+
+  // ---- Character Management (localStorage) ----
+  function loadSavedCharacters() {
+    try { return JSON.parse(localStorage.getItem(LS_CHARS) || '[]'); }
+    catch { return []; }
+  }
+
+  function saveCurrentCharacter() {
+    const data = getCharacterData();
+    const name = data.basic.name || '名無しの探索者';
+    const list = loadSavedCharacters();
+    list.unshift({ id: Date.now().toString(), name, occupation: data.basic.occupation, savedAt: new Date().toISOString(), data });
+    localStorage.setItem(LS_CHARS, JSON.stringify(list));
+    renderCharacterList();
+    alert(`「${name}」を保存しました。`);
+  }
+
+  function loadCharacterById(id) {
+    const entry = loadSavedCharacters().find(c => c.id === id);
+    if (!entry) return;
+    applyCharacterData(entry.data);
+    switchTab('status');
+  }
+
+  function deleteCharacterById(id) {
+    const entry = loadSavedCharacters().find(c => c.id === id);
+    if (!confirm(`「${entry?.name || 'このキャラクター'}」を削除しますか？`)) return;
+    const list = loadSavedCharacters().filter(c => c.id !== id);
+    localStorage.setItem(LS_CHARS, JSON.stringify(list));
+    renderCharacterList();
+  }
+
+  function renderCharacterList() {
+    const container = document.getElementById('character-list');
+    const list = loadSavedCharacters();
+
+    if (!list.length) {
+      container.innerHTML = '<p class="empty-msg">保存済みのキャラクターはありません。</p>';
+      return;
+    }
+
+    container.innerHTML = list.map(c => {
+      const date = new Date(c.savedAt).toLocaleString('ja-JP', { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+      return `
+        <div class="char-card">
+          <div class="char-card-name">${c.name}</div>
+          <div class="char-card-occ">${c.occupation || '職業未設定'}</div>
+          <div class="char-card-date">${date}</div>
+          <div class="char-card-actions">
+            <button class="btn primary small" onclick="App.loadCharacterById('${c.id}')">読み込む</button>
+            <button class="btn danger small"  onclick="App.deleteCharacterById('${c.id}')">削除</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  // ---- Stat Input ----
+  function onStatInput() {
+    CHARACTERISTICS.forEach(c => {
+      const val     = getStat(c.id);
+      const halfEl  = document.getElementById(`stat-half-${c.id}`);
+      const fifthEl = document.getElementById(`stat-fifth-${c.id}`);
+      if (halfEl)  halfEl.textContent  = val ? half(val)  : '-';
+      if (fifthEl) fifthEl.textContent = val ? fifth(val) : '-';
+    });
+    updateDerived();
+    updateSkillBases();
+    updatePoints();
+  }
+
   // ---- Init ----
   function init() {
-    // Occupation dropdown
-    const sel = document.getElementById('char-occupation');
-    OCCUPATIONS.forEach(occ => {
-      const opt = document.createElement('option');
-      opt.value = occ.name;
-      opt.textContent = occ.name;
-      sel.appendChild(opt);
+    // Tab switching
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => switchTab(btn.dataset.tab));
     });
+
+    // Occupation dropdown
+    rebuildOccupationDropdown();
 
     // Characteristics table
     const tbody = document.getElementById('stats-tbody');
@@ -304,11 +543,9 @@ const App = (() => {
     SKILL_CATEGORIES.forEach(cat => {
       const catSkills = SKILLS.filter(s => s.category === cat);
       if (!catSkills.length) return;
-
       const section = document.createElement('div');
       section.className = 'skill-category';
       section.innerHTML = `<div class="skill-cat-header">${cat}</div>`;
-
       catSkills.forEach(skill => {
         const id  = skillId(skill.name);
         const row = document.createElement('div');
@@ -317,11 +554,9 @@ const App = (() => {
         row.innerHTML = `
           <span class="skill-name">${skill.name}</span>
           <span class="skill-base" id="skill-base-${id}">-</span>
-          <input type="number" class="skill-pts" id="skill-occ-pts-${id}"
-              min="0" max="100" placeholder="0"
+          <input type="number" class="skill-pts" id="skill-occ-pts-${id}" min="0" max="100" placeholder="0"
               oninput="App.updateSkillCalc('${skill.name}'); App.updatePoints()">
-          <input type="number" class="skill-pts" id="skill-hobby-pts-${id}"
-              min="0" max="100" placeholder="0"
+          <input type="number" class="skill-pts" id="skill-hobby-pts-${id}" min="0" max="100" placeholder="0"
               oninput="App.updateSkillCalc('${skill.name}'); App.updatePoints()">
           <span class="skill-total" id="skill-total-${id}">-</span>
           <span class="skill-half"  id="skill-half-${id}">-</span>
@@ -329,30 +564,40 @@ const App = (() => {
         `;
         section.appendChild(row);
       });
-
       container.appendChild(section);
     });
 
-    updateDerived();
-    updateSkillBases();
-  }
-
-  function onStatInput() {
-    CHARACTERISTICS.forEach(c => {
-      const val     = getStat(c.id);
-      const halfEl  = document.getElementById(`stat-half-${c.id}`);
-      const fifthEl = document.getElementById(`stat-fifth-${c.id}`);
-      if (halfEl)  halfEl.textContent  = val ? half(val)  : '-';
-      if (fifthEl) fifthEl.textContent = val ? fifth(val) : '-';
+    // Occupation form: formula select
+    const formulaSel = document.getElementById('occ-new-formula');
+    FORMULA_OPTIONS.forEach(f => {
+      const opt = document.createElement('option');
+      opt.value = f.key;
+      opt.textContent = f.label;
+      formulaSel.appendChild(opt);
     });
+
+    // Occupation form: skill multiselect
+    const skillSel = document.getElementById('occ-new-skills');
+    SKILLS.forEach(skill => {
+      const opt = document.createElement('option');
+      opt.value = skill.name;
+      opt.textContent = skill.name;
+      skillSel.appendChild(opt);
+    });
+
+    renderCustomOccupationList();
+    renderCharacterList();
     updateDerived();
     updateSkillBases();
-    updatePoints();
   }
 
-  return { init, rollStat, rollAll, applyOccupation, updateDerived,
-           updateSkillBases, updateSkillCalc, updatePoints,
-           onStatInput, save, load, loadFromFile };
+  return {
+    init, rollStat, rollAll, applyOccupation, updateDerived,
+    updateSkillBases, updateSkillCalc, updatePoints, onStatInput,
+    save, load, loadFromFile,
+    addCustomOccupation, deleteCustomOccupation,
+    saveCurrentCharacter, loadCharacterById, deleteCharacterById,
+  };
 })();
 
 document.addEventListener('DOMContentLoaded', () => App.init());
