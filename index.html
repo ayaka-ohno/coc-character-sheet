@@ -14,7 +14,6 @@
   </header>
 
   <div class="toolbar">
-    <button class="btn primary" onclick="App.rollAll()">🎲 全能力値を振る</button>
     <button class="btn" onclick="App.save()">💾 保存 (JSON)</button>
     <button class="btn" onclick="App.load()">📂 読み込み</button>
     <input type="file" id="fileInput" accept=".json" onchange="App.loadFromFile(event)" style="display:none">
@@ -23,7 +22,7 @@
 
   <div class="sheet-grid">
 
-    <!-- ========== Left Column ========== -->
+    <!-- ========== Top: Left Column Content ========== -->
     <div class="col-left">
 
       <!-- Basic Info -->
@@ -134,7 +133,7 @@
 
     </div>
 
-    <!-- ========== Right Column ========== -->
+    <!-- ========== Bottom: Right Column Content ========== -->
     <div class="col-right">
 
       <!-- Points Budget -->
@@ -158,19 +157,17 @@
             <span id="hobby-points-used">0</span>
           </div>
         </div>
-        <p style="font-size:0.72rem; color:var(--text-muted); margin-top:0.5rem;">
-          ※ チェックボックスをオンにした技能が職業技能として計上されます
-        </p>
       </section>
 
       <!-- Skills -->
       <section class="card">
         <h3>技能一覧</h3>
         <div class="skills-header">
-          <span></span>
           <span style="text-align:left">技能名</span>
           <span>基本値</span>
-          <span>技能値</span>
+          <span>職業P</span>
+          <span>趣味P</span>
+          <span>合計</span>
           <span>1/2</span>
           <span>1/5</span>
         </div>

@@ -19,6 +19,10 @@ const App = (() => {
   function half(v)  { return Math.floor(v / 2); }
   function fifth(v) { return Math.floor(v / 5); }
 
+  function skillId(name) {
+    return name.replace(/[（）/\s・]/g, '_');
+  }
+
   // ---- Dice ----
   function rollStat(id) {
     const char = CHARACTERISTICS.find(c => c.id === id);
@@ -42,7 +46,6 @@ const App = (() => {
     const s = getStats();
     const age = parseInt(document.getElementById('char-age')?.value) || 0;
 
-    // MOV
     let mov = 8;
     if (s.dex < s.siz && s.str < s.siz) mov = 7;
     else if (s.dex >= s.siz && s.str >= s.siz) mov = 9;
@@ -52,7 +55,6 @@ const App = (() => {
     else if (age >= 50) mov -= 2;
     else if (age >= 40) mov -= 1;
 
-    // Build & DB
     const strSiz = s.str + s.siz;
     let build = 0, db = '0';
     if      (strSiz <= 64)  { build = -2; db = '-2'; }
@@ -73,7 +75,7 @@ const App = (() => {
       'der-san':   san   || '-',
       'der-san99': san ? `${san} / 99` : '-',
       'der-mov':   mov   || '-',
-      'der-build': build || '0',
+      'der-build': build !== undefined ? build : '0',
       'der-db':    db,
     };
     Object.entries(fields).forEach(([id, val]) => {
@@ -86,37 +88,40 @@ const App = (() => {
   function updateSkillBases() {
     const stats = getStats();
     SKILLS.forEach(skill => {
-      const baseEl = document.getElementById(`skill-base-${skillId(skill.name)}`);
-      const valEl  = document.getElementById(`skill-val-${skillId(skill.name)}`);
+      const id     = skillId(skill.name);
+      const baseEl = document.getElementById(`skill-base-${id}`);
       if (!baseEl) return;
       const baseVal = calcBase(skill.base, stats);
       baseEl.textContent = baseVal;
-      // only update value field if empty or still matches old base
-      if (!valEl.dataset.edited) {
-        valEl.value = baseVal;
-        updateSkillCalc(skill.name);
-      }
+      updateSkillCalc(skill.name);
     });
     updatePoints();
   }
 
   function updateSkillCalc(name) {
-    const id = skillId(name);
-    const val = parseInt(document.getElementById(`skill-val-${id}`)?.value) || 0;
+    const id      = skillId(name);
+    const baseEl  = document.getElementById(`skill-base-${id}`);
+    const occEl   = document.getElementById(`skill-occ-pts-${id}`);
+    const hobbyEl = document.getElementById(`skill-hobby-pts-${id}`);
+    const totalEl = document.getElementById(`skill-total-${id}`);
     const halfEl  = document.getElementById(`skill-half-${id}`);
     const fifthEl = document.getElementById(`skill-fifth-${id}`);
-    if (halfEl)  halfEl.textContent  = half(val);
-    if (fifthEl) fifthEl.textContent = fifth(val);
-  }
+    if (!baseEl) return;
 
-  function skillId(name) {
-    return name.replace(/[（）/\s・]/g, '_');
+    const base  = parseInt(baseEl.textContent)  || 0;
+    const occ   = parseInt(occEl?.value)         || 0;
+    const hobby = parseInt(hobbyEl?.value)        || 0;
+    const total = base + occ + hobby;
+
+    if (totalEl) totalEl.textContent = total;
+    if (halfEl)  halfEl.textContent  = half(total);
+    if (fifthEl) fifthEl.textContent = fifth(total);
   }
 
   // ---- Occupation ----
   function applyOccupation() {
-    const sel = document.getElementById('char-occupation');
-    const occ = OCCUPATIONS.find(o => o.name === sel.value);
+    const sel    = document.getElementById('char-occupation');
+    const occ    = OCCUPATIONS.find(o => o.name === sel.value);
     const infoBox = document.getElementById('occupation-info');
 
     if (!occ) {
@@ -130,10 +135,7 @@ const App = (() => {
     document.getElementById('occupation-skills').textContent  = occ.suggestedSkills.join('、');
     infoBox.style.display = 'block';
 
-    // highlight suggested skills
-    document.querySelectorAll('.skill-row').forEach(row => {
-      row.classList.remove('suggested');
-    });
+    document.querySelectorAll('.skill-row').forEach(row => row.classList.remove('suggested'));
     occ.suggestedSkills.forEach(name => {
       const row = document.getElementById(`skill-row-${skillId(name)}`);
       if (row) row.classList.add('suggested');
@@ -153,19 +155,13 @@ const App = (() => {
     document.getElementById('occ-points-total').textContent   = occTotal   ?? '-';
     document.getElementById('hobby-points-total').textContent = hobbyTotal ?? '-';
 
-    // calculate spent points
     let occSpent = 0, hobbySpent = 0;
     SKILLS.forEach(skill => {
       const id      = skillId(skill.name);
-      const baseEl  = document.getElementById(`skill-base-${id}`);
-      const valEl   = document.getElementById(`skill-val-${id}`);
-      const occChk  = document.getElementById(`skill-occ-${id}`);
-      if (!baseEl || !valEl) return;
-      const base = parseInt(baseEl.textContent) || 0;
-      const val  = parseInt(valEl.value) || 0;
-      const diff = Math.max(0, val - base);
-      if (occChk?.checked) occSpent   += diff;
-      else                 hobbySpent += diff;
+      const occPts  = parseInt(document.getElementById(`skill-occ-pts-${id}`)?.value)   || 0;
+      const hobbyPts= parseInt(document.getElementById(`skill-hobby-pts-${id}`)?.value) || 0;
+      occSpent   += occPts;
+      hobbySpent += hobbyPts;
     });
 
     document.getElementById('occ-points-used').textContent   = occSpent;
@@ -181,8 +177,8 @@ const App = (() => {
     SKILLS.forEach(skill => {
       const id = skillId(skill.name);
       skills[skill.name] = {
-        value:   parseInt(document.getElementById(`skill-val-${id}`)?.value) || 0,
-        occSkill: document.getElementById(`skill-occ-${id}`)?.checked || false,
+        occPts:   parseInt(document.getElementById(`skill-occ-pts-${id}`)?.value)   || 0,
+        hobbyPts: parseInt(document.getElementById(`skill-hobby-pts-${id}`)?.value) || 0,
       };
     });
 
@@ -199,13 +195,13 @@ const App = (() => {
       stats,
       skills,
       background: {
-        appearance: document.getElementById('bg-appearance')?.value,
-        personality:document.getElementById('bg-personality')?.value,
-        people:     document.getElementById('bg-people')?.value,
-        places:     document.getElementById('bg-places')?.value,
-        treasures:  document.getElementById('bg-treasures')?.value,
-        trauma:     document.getElementById('bg-trauma')?.value,
-        notes:      document.getElementById('bg-notes')?.value,
+        appearance:  document.getElementById('bg-appearance')?.value,
+        personality: document.getElementById('bg-personality')?.value,
+        people:      document.getElementById('bg-people')?.value,
+        places:      document.getElementById('bg-places')?.value,
+        treasures:   document.getElementById('bg-treasures')?.value,
+        trauma:      document.getElementById('bg-trauma')?.value,
+        notes:       document.getElementById('bg-notes')?.value,
       },
     };
 
@@ -228,8 +224,7 @@ const App = (() => {
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
-        const data = JSON.parse(e.target.result);
-        applyData(data);
+        applyData(JSON.parse(e.target.result));
       } catch {
         alert('JSONの読み込みに失敗しました。');
       }
@@ -252,11 +247,11 @@ const App = (() => {
     });
 
     Object.entries(data.skills || {}).forEach(([name, info]) => {
-      const id   = skillId(name);
-      const valEl = document.getElementById(`skill-val-${id}`);
-      const occEl = document.getElementById(`skill-occ-${id}`);
-      if (valEl) { valEl.value = info.value; valEl.dataset.edited = '1'; }
-      if (occEl)   occEl.checked = info.occSkill;
+      const id      = skillId(name);
+      const occEl   = document.getElementById(`skill-occ-pts-${id}`);
+      const hobbyEl = document.getElementById(`skill-hobby-pts-${id}`);
+      if (occEl)   occEl.value   = info.occPts   || 0;
+      if (hobbyEl) hobbyEl.value = info.hobbyPts || 0;
       updateSkillCalc(name);
     });
 
@@ -296,8 +291,7 @@ const App = (() => {
           <span class="stat-formula">${c.formula}</span>
         </td>
         <td><input type="number" id="stat-${c.id}" class="stat-input" min="0" max="200"
-            oninput="App.onStatInput()"
-            placeholder="-"></td>
+            oninput="App.onStatInput()" placeholder="-"></td>
         <td class="stat-calc" id="stat-half-${c.id}">-</td>
         <td class="stat-calc" id="stat-fifth-${c.id}">-</td>
         <td><button class="btn dice-btn" onclick="App.rollStat('${c.id}')">🎲</button></td>
@@ -321,13 +315,15 @@ const App = (() => {
         row.className = 'skill-row';
         row.id = `skill-row-${id}`;
         row.innerHTML = `
-          <input type="checkbox" class="skill-occ-chk" id="skill-occ-${id}"
-              title="職業技能としてマーク" onchange="App.updatePoints()">
-          <label class="skill-name" for="skill-occ-${id}">${skill.name}</label>
+          <span class="skill-name">${skill.name}</span>
           <span class="skill-base" id="skill-base-${id}">-</span>
-          <input type="number" class="skill-val" id="skill-val-${id}"
-              min="0" max="100" placeholder="-"
-              oninput="this.dataset.edited='1'; App.updateSkillCalc('${skill.name}'); App.updatePoints()">
+          <input type="number" class="skill-pts" id="skill-occ-pts-${id}"
+              min="0" max="100" placeholder="0"
+              oninput="App.updateSkillCalc('${skill.name}'); App.updatePoints()">
+          <input type="number" class="skill-pts" id="skill-hobby-pts-${id}"
+              min="0" max="100" placeholder="0"
+              oninput="App.updateSkillCalc('${skill.name}'); App.updatePoints()">
+          <span class="skill-total" id="skill-total-${id}">-</span>
           <span class="skill-half"  id="skill-half-${id}">-</span>
           <span class="skill-fifth" id="skill-fifth-${id}">-</span>
         `;
@@ -337,15 +333,13 @@ const App = (() => {
       container.appendChild(section);
     });
 
-    // Stat input live update
     updateDerived();
     updateSkillBases();
   }
 
   function onStatInput() {
-    // update half/fifth for each stat
     CHARACTERISTICS.forEach(c => {
-      const val = getStat(c.id);
+      const val     = getStat(c.id);
       const halfEl  = document.getElementById(`stat-half-${c.id}`);
       const fifthEl = document.getElementById(`stat-fifth-${c.id}`);
       if (halfEl)  halfEl.textContent  = val ? half(val)  : '-';
