@@ -282,11 +282,13 @@
                 <input type="number" id="occ-new-cr-max" min="0" max="99" placeholder="例: 60">
               </div>
               <div class="field">
-                <label>推奨技能（複数選択可）</label>
-                <select id="occ-new-skills" multiple class="skill-multiselect"></select>
-                <p class="field-hint">Ctrl（Mac: ⌘）を押しながらクリックで複数選択</p>
+                <label>推奨技能</label>
+                <div id="occ-skill-checkboxes" class="skill-checkboxes"></div>
               </div>
-              <button class="btn primary" onclick="App.addCustomOccupation()">追加する</button>
+              <div class="occ-form-actions">
+                <button class="btn primary" id="occ-submit-btn" onclick="App.addCustomOccupation()">追加する</button>
+                <button class="btn" id="occ-cancel-btn" onclick="App.cancelEditOccupation()" style="display:none">キャンセル</button>
+              </div>
             </div>
           </div>
         </div>

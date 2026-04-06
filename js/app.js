@@ -370,6 +370,8 @@ const App = (() => {
   }
 
   // ---- Custom Occupations (localStorage) ----
+  let editingOccId = null;
+
   function loadCustomOccupations() {
     try { return JSON.parse(localStorage.getItem(LS_OCCS) || '[]'); }
     catch { return []; }
@@ -379,36 +381,91 @@ const App = (() => {
     localStorage.setItem(LS_OCCS, JSON.stringify(list));
   }
 
+  function getCheckedSkills() {
+    return Array.from(document.querySelectorAll('#occ-skill-checkboxes input[type="checkbox"]:checked'))
+      .map(cb => cb.value);
+  }
+
+  function setCheckedSkills(skills) {
+    document.querySelectorAll('#occ-skill-checkboxes input[type="checkbox"]').forEach(cb => {
+      cb.checked = skills.includes(cb.value);
+    });
+  }
+
+  function clearOccForm() {
+    document.getElementById('occ-new-name').value    = '';
+    document.getElementById('occ-new-desc').value    = '';
+    document.getElementById('occ-new-cr-min').value  = '';
+    document.getElementById('occ-new-cr-max').value  = '';
+    setCheckedSkills([]);
+  }
+
   function addCustomOccupation() {
     const name    = document.getElementById('occ-new-name').value.trim();
     const desc    = document.getElementById('occ-new-desc').value.trim();
     const formula = document.getElementById('occ-new-formula').value;
     const crMin   = parseInt(document.getElementById('occ-new-cr-min').value) || 0;
     const crMax   = parseInt(document.getElementById('occ-new-cr-max').value) || 0;
-    const skillSel = document.getElementById('occ-new-skills');
-    const skills  = Array.from(skillSel.selectedOptions).map(o => o.value);
+    const skills  = getCheckedSkills();
 
-    if (!name) { alert('職業名を入力してください。'); return; }
+    if (!name)    { alert('職業名を入力してください。'); return; }
     if (!formula) { alert('技能ポイント計算式を選択してください。'); return; }
 
     const list = loadCustomOccupations();
-    list.push({ id: Date.now().toString(), name, description: desc, formulaKey: formula, crMin, crMax, suggestedSkills: skills });
+
+    if (editingOccId) {
+      const idx = list.findIndex(o => o.id === editingOccId);
+      if (idx !== -1) {
+        list[idx] = { ...list[idx], name, description: desc, formulaKey: formula, crMin, crMax, suggestedSkills: skills };
+      }
+      editingOccId = null;
+    } else {
+      list.push({ id: Date.now().toString(), name, description: desc, formulaKey: formula, crMin, crMax, suggestedSkills: skills });
+    }
+
     saveCustomOccupations(list);
-
-    // reset form
-    document.getElementById('occ-new-name').value  = '';
-    document.getElementById('occ-new-desc').value  = '';
-    document.getElementById('occ-new-cr-min').value = '';
-    document.getElementById('occ-new-cr-max').value = '';
-    Array.from(skillSel.options).forEach(o => o.selected = false);
-
+    clearOccForm();
+    setOccFormMode(false);
     renderCustomOccupationList();
     rebuildOccupationDropdown();
   }
 
+  function editCustomOccupation(id) {
+    const occ = loadCustomOccupations().find(o => o.id === id);
+    if (!occ) return;
+    editingOccId = id;
+
+    document.getElementById('occ-new-name').value   = occ.name;
+    document.getElementById('occ-new-desc').value   = occ.description || '';
+    document.getElementById('occ-new-formula').value = occ.formulaKey;
+    document.getElementById('occ-new-cr-min').value = occ.crMin || '';
+    document.getElementById('occ-new-cr-max').value = occ.crMax || '';
+    setCheckedSkills(occ.suggestedSkills || []);
+
+    setOccFormMode(true);
+    document.getElementById('occ-new-name').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function cancelEditOccupation() {
+    editingOccId = null;
+    clearOccForm();
+    setOccFormMode(false);
+  }
+
+  function setOccFormMode(isEdit) {
+    const submitBtn = document.getElementById('occ-submit-btn');
+    const cancelBtn = document.getElementById('occ-cancel-btn');
+    const formTitle = document.querySelector('.occ-form-col .card h3');
+    if (submitBtn) submitBtn.textContent = isEdit ? '更新する' : '追加する';
+    if (cancelBtn) cancelBtn.style.display = isEdit ? '' : 'none';
+    if (formTitle) formTitle.textContent   = isEdit ? '職業を編集' : '新しい職業を追加';
+  }
+
   function deleteCustomOccupation(id) {
-    const list = loadCustomOccupations().filter(o => o.id !== id);
-    saveCustomOccupations(list);
+    const occ = loadCustomOccupations().find(o => o.id === id);
+    if (!confirm(`「${occ?.name || 'この職業'}」を削除しますか？`)) return;
+    if (editingOccId === id) cancelEditOccupation();
+    saveCustomOccupations(loadCustomOccupations().filter(o => o.id !== id));
     renderCustomOccupationList();
     rebuildOccupationDropdown();
   }
@@ -428,11 +485,14 @@ const App = (() => {
         <div class="custom-occ-card">
           <div class="custom-occ-header">
             <span class="custom-occ-name">${o.name}</span>
-            <button class="btn danger small" onclick="App.deleteCustomOccupation('${o.id}')">削除</button>
+            <div class="custom-occ-btns">
+              <button class="btn small" onclick="App.editCustomOccupation('${o.id}')">編集</button>
+              <button class="btn danger small" onclick="App.deleteCustomOccupation('${o.id}')">削除</button>
+            </div>
           </div>
           ${o.description ? `<p class="custom-occ-desc">${o.description}</p>` : ''}
           <p class="custom-occ-meta">技能P：${formula ? formula.label : o.formulaKey}</p>
-          ${o.suggestedSkills.length ? `<p class="custom-occ-meta">推奨技能：${o.suggestedSkills.join('、')}</p>` : ''}
+          ${o.suggestedSkills?.length ? `<p class="custom-occ-meta">推奨技能：${o.suggestedSkills.join('、')}</p>` : ''}
           <p class="custom-occ-meta">信用ランク：${o.crMin} 〜 ${o.crMax}</p>
         </div>
       `;
@@ -480,19 +540,71 @@ const App = (() => {
     }
 
     container.innerHTML = list.map(c => {
-      const date = new Date(c.savedAt).toLocaleString('ja-JP', { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+      const date  = new Date(c.savedAt).toLocaleString('ja-JP', { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+      const stats = c.data?.stats || {};
+      const statKeys = ['str','con','siz','dex','app','int','pow','edu','luk'];
+      const statLabels = { str:'STR',con:'CON',siz:'SIZ',dex:'DEX',app:'APP',int:'INT',pow:'POW',edu:'EDU',luk:'LUK' };
+      const statsHTML = statKeys.map(k =>
+        `<span class="prev-stat"><span class="prev-stat-name">${statLabels[k]}</span><span class="prev-stat-val">${stats[k] || '-'}</span></span>`
+      ).join('');
+
+      const bg = c.data?.background || {};
+      const topSkills = Object.entries(c.data?.skills || {})
+        .map(([name, v]) => {
+          const skill = SKILLS.find(s => s.name === name);
+          const base  = typeof skill?.base === 'number' ? skill.base : 0;
+          return { name, total: base + (v.occPts || 0) + (v.hobbyPts || 0) };
+        })
+        .filter(s => s.total > 0)
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 6);
+      const topSkillsHTML = topSkills.map(s =>
+        `<span class="prev-skill"><span>${s.name}</span><span class="prev-skill-val">${s.total}</span></span>`
+      ).join('');
+
       return `
-        <div class="char-card">
-          <div class="char-card-name">${c.name}</div>
-          <div class="char-card-occ">${c.occupation || '職業未設定'}</div>
-          <div class="char-card-date">${date}</div>
-          <div class="char-card-actions">
-            <button class="btn primary small" onclick="App.loadCharacterById('${c.id}')">読み込む</button>
-            <button class="btn danger small"  onclick="App.deleteCharacterById('${c.id}')">削除</button>
+        <div class="char-card" onclick="App.togglePreview('${c.id}')" data-id="${c.id}">
+          <div class="char-card-summary">
+            <div>
+              <div class="char-card-name">${c.name}</div>
+              <div class="char-card-occ">${c.occupation || '職業未設定'}</div>
+              <div class="char-card-date">${date}</div>
+            </div>
+            <span class="char-card-chevron" id="chevron-${c.id}">▼</span>
+          </div>
+
+          <div class="char-preview" id="preview-${c.id}" style="display:none">
+            <div class="prev-section">
+              <div class="prev-label">能力値</div>
+              <div class="prev-stats">${statsHTML}</div>
+            </div>
+            ${topSkills.length ? `
+            <div class="prev-section">
+              <div class="prev-label">主要技能（上位6）</div>
+              <div class="prev-skills">${topSkillsHTML}</div>
+            </div>` : ''}
+            ${bg.personality ? `
+            <div class="prev-section">
+              <div class="prev-label">性格・信条</div>
+              <div class="prev-text">${bg.personality}</div>
+            </div>` : ''}
+            <div class="char-card-actions" onclick="event.stopPropagation()">
+              <button class="btn primary small" onclick="App.loadCharacterById('${c.id}')">読み込む</button>
+              <button class="btn danger small"  onclick="App.deleteCharacterById('${c.id}')">削除</button>
+            </div>
           </div>
         </div>
       `;
     }).join('');
+  }
+
+  function togglePreview(id) {
+    const preview = document.getElementById(`preview-${id}`);
+    const chevron = document.getElementById(`chevron-${id}`);
+    if (!preview) return;
+    const isOpen = preview.style.display !== 'none';
+    preview.style.display = isOpen ? 'none' : 'block';
+    if (chevron) chevron.textContent = isOpen ? '▼' : '▲';
   }
 
   // ---- Stat Input ----
@@ -576,13 +688,22 @@ const App = (() => {
       formulaSel.appendChild(opt);
     });
 
-    // Occupation form: skill multiselect
-    const skillSel = document.getElementById('occ-new-skills');
-    SKILLS.forEach(skill => {
-      const opt = document.createElement('option');
-      opt.value = skill.name;
-      opt.textContent = skill.name;
-      skillSel.appendChild(opt);
+    // Occupation form: skill checkboxes grouped by category
+    const cbContainer = document.getElementById('occ-skill-checkboxes');
+    SKILL_CATEGORIES.forEach(cat => {
+      const catSkills = SKILLS.filter(s => s.category === cat);
+      if (!catSkills.length) return;
+      const group = document.createElement('div');
+      group.className = 'skill-cb-group';
+      group.innerHTML = `<div class="skill-cb-cat">${cat}</div>`;
+      catSkills.forEach(skill => {
+        const id  = `occ-cb-${skillId(skill.name)}`;
+        const item = document.createElement('label');
+        item.className = 'skill-cb-item';
+        item.innerHTML = `<input type="checkbox" id="${id}" value="${skill.name}"><span>${skill.name}</span>`;
+        group.appendChild(item);
+      });
+      cbContainer.appendChild(group);
     });
 
     renderCustomOccupationList();
@@ -595,8 +716,8 @@ const App = (() => {
     init, rollStat, rollAll, applyOccupation, updateDerived,
     updateSkillBases, updateSkillCalc, updatePoints, onStatInput,
     save, load, loadFromFile,
-    addCustomOccupation, deleteCustomOccupation,
-    saveCurrentCharacter, loadCharacterById, deleteCharacterById,
+    addCustomOccupation, editCustomOccupation, deleteCustomOccupation, cancelEditOccupation,
+    saveCurrentCharacter, loadCharacterById, deleteCharacterById, togglePreview,
   };
 })();
 
