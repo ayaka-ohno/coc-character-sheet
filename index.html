@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>クトゥルフ神話TRPG 7版 キャラクターシート</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <h1>クトゥルフ神話TRPG <em>Call of Cthulhu 7th Edition</em></h1>
+    <h2>探索者シート</h2>
+  </header>
+
+  <div class="toolbar">
+    <button class="btn primary" onclick="App.rollAll()">🎲 全能力値を振る</button>
+    <button class="btn" onclick="App.save()">💾 保存 (JSON)</button>
+    <button class="btn" onclick="App.load()">📂 読み込み</button>
+    <input type="file" id="fileInput" accept=".json" onchange="App.loadFromFile(event)" style="display:none">
+    <button class="btn" onclick="window.print()">🖨️ 印刷</button>
+  </div>
+
+  <div class="sheet-grid">
+
+    <!-- ========== Left Column ========== -->
+    <div class="col-left">
+
+      <!-- Basic Info -->
+      <section class="card">
+        <h3>基本情報</h3>
+        <div class="info-grid">
+          <div class="field">
+            <label>探索者名</label>
+            <input type="text" id="char-name" placeholder="名前を入力">
+          </div>
+          <div class="field">
+            <label>職業</label>
+            <select id="char-occupation" onchange="App.applyOccupation()">
+              <option value="">── 選択してください ──</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>年齢</label>
+            <input type="number" id="char-age" min="15" max="90" placeholder="例: 28"
+                oninput="App.updateDerived()">
+          </div>
+          <div class="field">
+            <label>性別</label>
+            <input type="text" id="char-gender" placeholder="例: 女性">
+          </div>
+          <div class="field">
+            <label>出身地</label>
+            <input type="text" id="char-birthplace" placeholder="例: 東京">
+          </div>
+          <div class="field">
+            <label>居住地</label>
+            <input type="text" id="char-residence" placeholder="例: 横浜">
+          </div>
+        </div>
+        <div class="occupation-info" id="occupation-info" style="display:none">
+          <p id="occupation-desc" style="margin-bottom:0.4rem;"></p>
+          <p><strong>技能ポイント：</strong><span id="occupation-formula"></span></p>
+          <p><strong>推奨技能：</strong><span id="occupation-skills"></span></p>
+        </div>
+      </section>
+
+      <!-- Characteristics -->
+      <section class="card">
+        <div class="card-header">
+          <h3>能力値</h3>
+          <button class="btn primary small" onclick="App.rollAll()">🎲 全部振る</button>
+        </div>
+        <table class="stats-table">
+          <thead>
+            <tr>
+              <th style="text-align:left">能力値</th>
+              <th>値</th>
+              <th>1/2</th>
+              <th>1/5</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="stats-tbody"></tbody>
+        </table>
+      </section>
+
+      <!-- Derived Stats -->
+      <section class="card">
+        <h3>派生ステータス</h3>
+        <div class="derived-grid">
+          <div class="derived-item">
+            <span class="der-label">耐久力 HP</span>
+            <span class="der-value" id="der-hp">-</span>
+          </div>
+          <div class="derived-item">
+            <span class="der-label">MP</span>
+            <span class="der-value" id="der-mp">-</span>
+          </div>
+          <div class="derived-item">
+            <span class="der-label">正気度 SAN</span>
+            <span class="der-value" id="der-san">-</span>
+          </div>
+          <div class="derived-item">
+            <span class="der-label">現在/最大 SAN</span>
+            <span class="der-value" id="der-san99" style="font-size:0.9rem">-</span>
+          </div>
+          <div class="derived-item">
+            <span class="der-label">移動力 MOV</span>
+            <span class="der-value" id="der-mov">-</span>
+          </div>
+          <div class="derived-item">
+            <span class="der-label">体格 Build</span>
+            <span class="der-value" id="der-build">-</span>
+          </div>
+          <div class="derived-item" style="grid-column: span 2">
+            <span class="der-label">ダメージボーナス DB</span>
+            <span class="der-value" id="der-db">-</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Portrait -->
+      <section class="card">
+        <h3>立ち絵</h3>
+        <div class="portrait-area">
+          <div class="portrait-placeholder">
+            <div class="portrait-icon">👤</div>
+            <p>立ち絵エリア</p>
+            <small>画像生成機能は<br>今後追加予定</small>
+          </div>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- ========== Right Column ========== -->
+    <div class="col-right">
+
+      <!-- Points Budget -->
+      <section class="card">
+        <h3>技能ポイント残数</h3>
+        <div class="points-grid">
+          <div class="point-item">
+            <label>職業P 合計</label>
+            <span id="occ-points-total">-</span>
+          </div>
+          <div class="point-item">
+            <label>職業P 使用</label>
+            <span id="occ-points-used">0</span>
+          </div>
+          <div class="point-item">
+            <label>趣味P 合計</label>
+            <span id="hobby-points-total">-</span>
+          </div>
+          <div class="point-item">
+            <label>趣味P 使用</label>
+            <span id="hobby-points-used">0</span>
+          </div>
+        </div>
+        <p style="font-size:0.72rem; color:var(--text-muted); margin-top:0.5rem;">
+          ※ チェックボックスをオンにした技能が職業技能として計上されます
+        </p>
+      </section>
+
+      <!-- Skills -->
+      <section class="card">
+        <h3>技能一覧</h3>
+        <div class="skills-header">
+          <span></span>
+          <span style="text-align:left">技能名</span>
+          <span>基本値</span>
+          <span>技能値</span>
+          <span>1/2</span>
+          <span>1/5</span>
+        </div>
+        <div id="skills-container"></div>
+      </section>
+
+      <!-- Background -->
+      <section class="card">
+        <h3>バックグラウンド</h3>
+        <div class="bg-grid">
+          <div class="field full">
+            <label>外見・特徴</label>
+            <textarea id="bg-appearance" rows="2" placeholder="外見や特徴的な容姿、服装の傾向など"></textarea>
+          </div>
+          <div class="field full">
+            <label>性格・信条</label>
+            <textarea id="bg-personality" rows="2" placeholder="性格、価値観、信念など"></textarea>
+          </div>
+          <div class="field full">
+            <label>重要な人物</label>
+            <textarea id="bg-people" rows="2" placeholder="大切な人物とその関係（例: 幼馴染の山田太郎）"></textarea>
+          </div>
+          <div class="field full">
+            <label>大切な場所</label>
+            <textarea id="bg-places" rows="2" placeholder="思い出の場所、活動拠点など"></textarea>
+          </div>
+          <div class="field full">
+            <label>宝物・形見</label>
+            <textarea id="bg-treasures" rows="2" placeholder="大切にしている物や形見など"></textarea>
+          </div>
+          <div class="field full">
+            <label>傷跡・トラウマ</label>
+            <textarea id="bg-trauma" rows="2" placeholder="過去の傷や心の傷、忘れられない出来事など"></textarea>
+          </div>
+          <div class="field full">
+            <label>メモ・その他</label>
+            <textarea id="bg-notes" rows="3" placeholder="所持品、武器、その他メモなど"></textarea>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+
+  <script src="js/data.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
